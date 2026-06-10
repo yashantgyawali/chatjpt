@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>chatJPT — the prompt-rule party game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Atkinson+Hyperlegible:wght@400;700&family=Patrick+Hand&display=swap" rel="stylesheet">
+<style>
+:root {
+  --tumlet-red: #F16147; --tumlet-yellow: #F3B952; --tumlet-beige: #FAF1E4;
+  --tumlet-ink: #130D01; --tumlet-brown: #5A3A1F; --tumlet-paper: #FFFFFF;
+  --tumlet-footer: #6B6B6B; --tumlet-green: #5A8A4A;
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-pill: 999px;
+  --font-body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --font-display: 'Manrope', system-ui, sans-serif;
+  --font-hand: 'Patrick Hand', cursive;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; }
+body {
+  min-height: 100dvh; height: 100%;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(241,97,71,0.10) 0 3px, transparent 3px),
+    radial-gradient(circle at 78% 62%, rgba(243,185,82,0.14) 0 3px, transparent 3px),
+    radial-gradient(circle at 44% 88%, rgba(113,132,190,0.10) 0 4px, transparent 4px),
+    var(--tumlet-beige);
+  background-size: 90px 90px, 90px 90px, 110px 110px, auto;
+  color: var(--tumlet-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+#root { min-height: 100dvh; }
+input, textarea, button { font-family: inherit; }
+input, textarea {
+  background: var(--tumlet-paper); border: 2px solid var(--tumlet-ink);
+  border-radius: var(--radius-md); color: var(--tumlet-ink); outline: none;
+}
+input:focus, textarea:focus { border-color: var(--tumlet-red); }
+.pill-btn {
+  font-family: var(--font-body); font-weight: 700; border: 0;
+  border-radius: var(--radius-md); cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.12s ease;
+  transform: rotate(-0.88deg);
+}
+.pill-btn:hover:not(:disabled) { transform: rotate(-0.88deg) translate(-3px,-3px); }
+.pill-btn:active:not(:disabled) { transform: rotate(-0.88deg) scale(0.98); }
+.pill-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+.typing { display: inline-flex; gap: 4px; align-items: center; }
+.typing i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.5;
+  animation: bob 1s infinite ease-in-out; display: inline-block; }
+.typing i:nth-child(2) { animation-delay: 0.15s; }
+.typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes bob { 0%,80%,100%{transform:translateY(0);opacity:.4} 40%{transform:translateY(-5px);opacity:1} }
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes handpop {
+  0%{transform:scale(0.3) rotate(-25deg);opacity:0}
+  60%{transform:scale(1.25) rotate(8deg)}
+  100%{transform:scale(1) rotate(0);opacity:1}
+}
+.hand-pop { animation: handpop 0.4s cubic-bezier(.2,1.4,.4,1) both; }
+@keyframes slideup { from{transform:translateY(16px);opacity:0} to{transform:translateY(0);opacity:1} }
+.slideup { animation: slideup 0.32s ease-out both; }
+@keyframes fall {
+  0%{transform:translateY(-30px) rotate(0deg);opacity:1}
+  100%{transform:translateY(110vh) rotate(720deg);opacity:.9}
+}
+.confetti-piece { position:fixed; top:-20px; will-change:transform; pointer-events:none; z-index:200; }
+::-webkit-scrollbar { width:0; height:0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useEffect, useRef, useMemo } = React;
+
+// ─── config ────────────────────────────────────────────────────────────────
+const SUPA_URL = 'https://xtoviysixmnlbehsdlug.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh0b3ZpeXNpeG1ubGJlaHNkbHVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MTE1MDksImV4cCI6MjA5NjM4NzUwOX0.Ng-9QZ_0ekB8SI-9ts4Hv6raB9_DH0UjVioawMjjxoo';
+const db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// ─── helpers ───────────────────────────────────────────────────────────────
+const genCode = () => String(Math.floor(100000 + Math.random() * 900000));
+const genId   = () => Math.random().toString(36).slice(2,9) + Date.now().toString(36);
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length-1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+
+// ─── word lists for rule checking ─────────────────────────────────────────
+const COLOR_WORDS = ['red','orange','yellow','green','blue','purple','pink','black','white','brown','gray','grey','gold','silver','teal','cyan','magenta','violet','indigo','maroon','navy','crimson','scarlet','turquoise','lime','beige','tan'];
+const NUMBER_WORDS = ['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety','hundred','thousand','million','billion','dozen','couple','few','dozens'];
+const BODY_PARTS = ['head','eye','eyes','ear','ears','nose','mouth','arm','arms','elbow','elbows','hand','hands','finger','fingers','leg','legs','knee','knees','foot','feet','toe','toes','heart','brain','hip','hips','neck','shoulder','shoulders','back','chest','belly','stomach','lung','lungs','bone','bones','skin','hair','tooth','teeth','lip','lips','chin','cheek','cheeks','throat','thumb','thumbs','ankle','wrist','spine','rib','ribs','jaw','tongue','face','gut','heel','palm','palms','nail','nails','brow'];
+function tokens(text) { return (text || '').toLowerCase().split(/[^a-z]+/).filter(Boolean); }
+
+// ─── game data ─────────────────────────────────────────────────────────────
+const RULES = [
+  { id:'color',    glyph:'🎨', label:'Color word',             full:'Your answer must include a COLOR word.',
+    check: a => tokens(a).some(t => COLOR_WORDS.includes(t)) },
+  { id:'twowords', glyph:'✌️', label:'At least two words',     full:'Your answer must be AT LEAST two words.',
+    check: a => (a||'').trim().split(/\s+/).filter(Boolean).length >= 2 },
+  { id:'number',   glyph:'🔢', label:'A number, spelled',      full:'Your answer must include a NUMBER written as a word.',
+    check: a => tokens(a).some(t => NUMBER_WORDS.includes(t)) },
+  { id:'body',     glyph:'🦵', label:'A body part',            full:'Your answer must include a BODY PART.',
+    check: a => tokens(a).some(t => BODY_PARTS.includes(t)) },
+  { id:'exclaim',  glyph:'❗', label:'Ends with a bang',       full:'Your answer must END with an exclamation mark!',
+    check: a => (a||'').trim().endsWith('!') },
+  { id:'titlecase',glyph:'Aa', label:'Title Case',             full:'Every Word Must Be In Title Case.',
+    check: a => { const w=(a||'').trim().split(/\s+/).filter(Boolean); return w.length>0 && w.every(x=>/^[A-Z]/.test(x)); } },
+  { id:'lower',    glyph:'aa', label:'all lowercase',          full:'your whole answer must be lowercase only.',
+    check: a => (a||'').trim().length>0 && (a||'')===(a||'').toLowerCase() },
+  { id:'question', glyph:'❓', label:'Ends as a question',     full:'Your answer must end with a question?',
+    check: a => (a||'').trim().endsWith('?') },
+  { id:'noe',      glyph:'🚫', label:'No letter E',            full:'Your answer must contain NO letter E anywhere.',
+    check: a => (a||'').trim().length>0 && !/e/i.test(a||'') },
+  { id:'oneword',  glyph:'☝️', label:'Exactly one word',      full:'Your answer must be EXACTLY one word.',
+    check: a => (a||'').trim().split(/\s+/).filter(Boolean).length === 1 },
+  { id:'long',     glyph:'📏', label:'Over 12 letters',        full:'Your answer must be MORE than 12 letters total.',
+    check: a => tokens(a).join('').length > 12 },
+  { id:'short',    glyph:'🤏', label:'Under 6 letters',        full:'Your answer must be LESS than 6 letters total.',
+    check: a => { const n=tokens(a).join('').length; return n>0 && n<6; } },
+  { id:'samestart',glyph:'🔠', label:'Same first letter',      full:'Every word must start with the SAME letter.',
+    check: a => { const w=(a||'').trim().toLowerCase().split(/\s+/).filter(Boolean); return w.length>1 && w.every(x=>x[0]===w[0][0]); } },
+  { id:'nopunct',  glyph:'∅',  label:'No punctuation',         full:'No punctuation whatsoever.',
+    check: a => (a||'').trim().length>0 && !/[.,!?;:'"\\-—()]/.test(a||'') },
+  { id:'actually', glyph:'🤓', label:'Start with "Actually,"', full:'Your answer must start with "Actually,".',
+    check: a => /^actually,/i.test((a||'').trim()) },
+  { id:'emdash',   glyph:'—',  label:'Exactly one em dash',    full:'Must contain exactly one em dash —',
+    check: a => ((a||'').match(/—/g)||[]).length === 1 },
+  { id:'hyphen',   glyph:'-',  label:'hyphen-between-words',   full:'A-hyphen-between-every-single-word.',
+    check: a => (a||'').trim().length>0 && /\S-\S/.test(a||'') && !/\s/.test((a||'').trim()) },
+  { id:'nodots',   glyph:'ı',  label:'No dots on i & j',       full:'j and i carry no dots (j → ȷ, i → ı).' },
+  { id:'typo',     glyph:'✗',  label:'Contains a typo',        full:'Your answer must contain a spelling error.' },
+  { id:'cipher',   glyph:'↪',  label:'A→B shift cipher',       full:'Shift every letter forward: A→B, B→C, C→D…' },
+  { id:'bdswap',   glyph:'⇄',  label:'b and d swapped',        full:'b and d are swapped everywhere.' },
+  { id:'wrong',    glyph:'🙃', label:'Factually wrong',        full:'Your answer must be factually WRONG.' },
+  { id:'backwards',glyph:'⇋',  label:'Written backwards',      full:'Write the whole answer backwards.' },
+  { id:'revwords', glyph:'🔁', label:'Each word reversed',     full:'Reverse each word, keep order (cat dog → tac god).' },
+  { id:'altcaps',  glyph:'aA', label:'aLtErNaTiNg CaPs',       full:'tYpE lIkE tHiS — aLtErNaTiNg CaPs.' },
+];
+const RULE = Object.fromEntries(RULES.map(r => [r.id, r]));
+
+const QUESTIONS = [
+  'What is the best thing to eat at 3am?',
+  'Describe your ideal morning routine.',
+  'Pitch me a startup in one line.',
+  "What's your hot take on pizza?",
+  'How would you describe a sunset to an alien?',
+  "What's the worst superpower to have?",
+  'What would you do with one million dollars?',
+  'What does happiness smell like?',
+  'How do you explain the internet to a grandparent?',
+  "What's a skill everyone should learn?",
+  'If you could talk to one animal, which would it be?',
+  'What would the title of your autobiography be?',
+  'Describe the perfect vacation in three words.',
+  "What's the most overrated food?",
+  'How would you survive a zombie apocalypse?',
+  'Describe the color blue without using the word blue.',
+  "What's the most important invention of all time?",
+  'If you could be any kitchen appliance, what would you be?',
+  "What's your secret talent?",
+  'If you had to eat one thing forever, what would it be?',
+  "What's the first thing you'd do on Mars?",
+  'How would you convince someone to try something new?',
+  "What's your cure for a bad day?",
+  'Describe your dream superpower.',
+  "What's the weirdest thing you've ever eaten?",
+];
+
+const COLORS = ['#F16147','#7184BE','#5A8A4A','#C9792E','#5A3A1F','#9B4DCA','#2E7D9B','#B5451B'];
+const pColor = p => COLORS[(p.sort_order || 0) % COLORS.length];
+
+// ─── shared components ─────────────────────────────────────────────────────
+function Wordmark({ size=32 }) {
+  return (
+    <span style={{fontFamily:'var(--font-display)',fontWeight:800,letterSpacing:'-0.03em',fontSize:size,lineHeight:1}}>
+      <span style={{color:'var(--tumlet-ink)'}}>chat</span>
+      <span style={{color:'var(--tumlet-red)'}}>JPT</span>
+      <span style={{display:'inline-block',width:'0.12em',height:'0.85em',marginLeft:3,
+        background:'var(--tumlet-red)',transform:'translateY(0.08em)',verticalAlign:'middle',
+        animation:'blink 1.05s steps(1) infinite'}} />
+    </span>
+  );
+}
+
+function Avatar({ player, size=40, dim=false }) {
+  return (
+    <div style={{width:size,height:size,borderRadius:'50%',background:pColor(player),color:'#fff',
+      display:'flex',alignItems:'center',justifyContent:'center',
+      fontFamily:'var(--font-display)',fontWeight:800,fontSize:size*0.42,flexShrink:0,
+      border:'2px solid var(--tumlet-ink)',boxShadow:'2px 2px 0 0 rgba(19,13,1,0.25)',
+      opacity:dim?0.32:1,transition:'opacity .25s ease',userSelect:'none'}}>
+      {(player.name||'?')[0].toUpperCase()}
+    </div>
+  );
+}
+
+// Collapsible rule peek — privacy-friendly for party play
+function RulePeek({ rule }) {
+  const [open, setOpen] = useState(false);
+  if (!rule) return null;
+  return (
+    <div style={{position:'sticky',top:0,zIndex:10,padding:'8px 14px 0'}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{
+        width:'100%',border:'2px solid var(--tumlet-ink)',cursor:'pointer',
+        borderRadius:'var(--radius-md)',textAlign:'left',
+        background:open?'var(--tumlet-ink)':'var(--tumlet-yellow)',
+        color:open?'var(--tumlet-beige)':'var(--tumlet-ink)',
+        padding:'10px 14px',boxShadow:'3px 3px 0 0 var(--tumlet-brown)',
+        fontFamily:'var(--font-body)',transition:'background .2s ease, color .2s ease',
+        display:'block',
+      }}>
+        <div style={{display:'flex',alignItems:'center',gap:8,fontWeight:700,fontSize:13}}>
+          <span style={{fontSize:11,letterSpacing:'0.14em',textTransform:'uppercase',opacity:0.75}}>
+            🔒 your secret rule
+          </span>
+          <span style={{marginLeft:'auto',fontSize:12,opacity:0.8}}>{open?'tap to hide':'tap to peek'}</span>
+        </div>
+        {open && (
+          <div className="slideup" style={{marginTop:8,display:'flex',alignItems:'center',gap:10}}>
+            <span style={{fontSize:26}}>{rule.glyph}</span>
+            <span style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:17,lineHeight:1.2}}>
+              {rule.full}
+            </span>
+          </div>
+        )}
+      </button>
+    </div>
+  );
+}
+
+function TimerRing({ seconds, total }) {
+  const r=16, c=2*Math.PI*r, frac=Math.max(0,seconds)/total, low=seconds<=10;
+  return (
+    <div style={{position:'relative',width:44,height:44}}>
+      <svg width="44" height="44" style={{transform:'rotate(-90deg)'}}>
+        <circle cx="22" cy="22" r={r} fill="none" stroke="rgba(19,13,1,0.12)" strokeWidth="4"/>
+        <circle cx="22" cy="22" r={r} fill="none" stroke={low?'var(--tumlet-red)':'var(--tumlet-ink)'} strokeWidth="4"
+          strokeDasharray={c} strokeDashoffset={c*(1-frac)} strokeLinecap="round"
+          style={{transition:'stroke-dashoffset 1s linear'}}/>
+      </svg>
+      <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',
+        fontFamily:'var(--font-display)',fontWeight:800,fontSize:15,
+        color:low?'var(--tumlet-red)':'var(--tumlet-ink)'}}>
+        {Math.max(0,seconds)}
+      </div>
+    </div>
+  );
+}
+
+function Confetti() {
+  const colors=['#F16147','#F3B952','#7184BE','#5A8A4A','#130D01'];
+  const [gone,setGone]=useState(false);
+  useEffect(()=>{ const t=setTimeout(()=>setGone(true),3200); return ()=>clearTimeout(t); },[]);
+  if (gone) return null;
+  return (
+    <>
+      {Array.from({length:80},(_,i)=>(
+        <div key={i} className="confetti-piece" style={{
+          left:((i*1.27)%100)+'%',
+          width:8+(i%9), height:(8+(i%9))*1.3,
+          background:colors[i%colors.length],
+          borderRadius:i%3===0?'50%':2,
+          animation:`fall ${2.2+(i*.015)%1.2}s ${(i*.04)%0.5}s cubic-bezier(.3,.1,.5,1) forwards`,
+        }}/>
+      ))}
+    </>
+  );
+}
+
+function useTimer(startedAt, duration) {
+  const dur = duration || 60;
+  const [rem, setRem] = useState(() => {
+    if (!startedAt) return dur;
+    return Math.max(0, dur - Math.floor((Date.now()-new Date(startedAt).getTime())/1000));
+  });
+  useEffect(() => {
+    if (!startedAt) return;
+    const iv = setInterval(() => {
+      setRem(Math.max(0, dur - Math.floor((Date.now()-new Date(startedAt).getTime())/1000)));
+    }, 500);
+    return () => clearInterval(iv);
+  }, [startedAt, dur]);
+  return rem;
+}
+
+// ─── splash ────────────────────────────────────────────────────────────────
+function Splash({ onSession }) {
+  const [mode, setMode] = useState(null);
+  const [name, setName] = useState('');
+  const [code, setCode] = useState('');
+  const [rounds, setRounds] = useState(5);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function create() {
+    if (!name.trim()) { setErr('Enter your name'); return; }
+    setBusy(true); setErr('');
+    const roomCode = genCode(), playerId = genId();
+    const questions = shuffle(QUESTIONS).slice(0, rounds);
+    const { error: re } = await db.from('chatjpt_rooms').insert({ code:roomCode, total_rounds:rounds, questions });
+    if (re) { setErr(re.message); setBusy(false); return; }
+    const { error: pe } = await db.from('chatjpt_players').insert({ id:playerId, room_code:roomCode, name:name.trim(), is_admin:true, sort_order:0 });
+    if (pe) { setErr(pe.message); setBusy(false); return; }
+    const s = { playerId, roomCode, isAdmin:true };
+    localStorage.setItem('chatjpt', JSON.stringify(s));
+    onSession(s);
+  }
+
+  async function join() {
+    if (!name.trim()) { setErr('Enter your name'); return; }
+    if (code.length !== 6) { setErr('Enter the 6-digit room code'); return; }
+    setBusy(true); setErr('');
+    const { data: room, error: re } = await db.from('chatjpt_rooms').select('phase').eq('code', code).single();
+    if (re || !room) { setErr('Room not found'); setBusy(false); return; }
+    if (room.phase !== 'lobby') { setErr('Game already started'); setBusy(false); return; }
+    const { data: existing } = await db.from('chatjpt_players').select('id').eq('room_code', code);
+    const playerId = genId();
+    const { error: pe } = await db.from('chatjpt_players').insert({ id:playerId, room_code:code, name:name.trim(), is_admin:false, sort_order:(existing||[]).length });
+    if (pe) { setErr(pe.message); setBusy(false); return; }
+    const s = { playerId, roomCode:code, isAdmin:false };
+    localStorage.setItem('chatjpt', JSON.stringify(s));
+    onSession(s);
+  }
+
+  const card = { background:'var(--tumlet-paper)', border:'2px solid var(--tumlet-ink)', borderRadius:'var(--radius-lg)', padding:24, boxShadow:'6px 6px 0 0 var(--tumlet-yellow)', width:'100%', maxWidth:340 };
+  const lbl = { fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--tumlet-footer)', display:'block', marginBottom:6 };
+  const inp = { width:'100%', padding:'10px 12px', fontSize:18, fontFamily:'var(--font-display)', fontWeight:700 };
+
+  return (
+    <div style={{minHeight:'100dvh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'20px 16px',gap:24}}>
+      <div style={{textAlign:'center'}}>
+        <Wordmark size={48}/>
+        <div style={{fontFamily:'var(--font-hand)',color:'var(--tumlet-brown)',fontSize:18,transform:'rotate(-1.5deg)',marginTop:4}}>
+          everyone's an AI. one secret rule each.
+        </div>
+      </div>
+
+      {!mode && (
+        <div style={{display:'flex',flexDirection:'column',gap:12,width:'100%',maxWidth:320}}>
+          <button className="pill-btn" onClick={()=>setMode('create')} style={{padding:'18px',fontSize:20,color:'#fff',background:'var(--tumlet-red)',boxShadow:'5px 5px 0 0 var(--tumlet-ink)'}}>
+            🎮 Create a Room
+          </button>
+          <button className="pill-btn" onClick={()=>setMode('join')} style={{padding:'18px',fontSize:20,color:'var(--tumlet-ink)',background:'var(--tumlet-yellow)',boxShadow:'5px 5px 0 0 var(--tumlet-brown)'}}>
+            🚪 Join a Room
+          </button>
+        </div>
+      )}
+
+      {mode && (
+        <div style={card}>
+          <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:22,marginBottom:18}}>
+            {mode==='create'?'🎮 Create Room':'🚪 Join Room'}
+          </div>
+          <div style={{marginBottom:14}}>
+            <label style={lbl}>Your name</label>
+            <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Alex"
+              onKeyDown={e=>e.key==='Enter'&&(mode==='create'?create():join())} style={inp}/>
+          </div>
+          {mode==='join' && (
+            <div style={{marginBottom:14}}>
+              <label style={lbl}>Room code</label>
+              <input value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="123456"
+                style={{...inp,fontSize:28,letterSpacing:'0.2em'}}/>
+            </div>
+          )}
+          {mode==='create' && (
+            <div style={{marginBottom:18}}>
+              <label style={lbl}>Questions per game</label>
+              <div style={{display:'flex',gap:8}}>
+                {[3,5,8].map(n=>(
+                  <button key={n} onClick={()=>setRounds(n)} style={{flex:1,padding:'10px 0',fontFamily:'var(--font-display)',fontWeight:800,fontSize:18,cursor:'pointer',border:'2px solid var(--tumlet-ink)',borderRadius:'var(--radius-md)',background:rounds===n?'var(--tumlet-yellow)':'var(--tumlet-paper)',boxShadow:rounds===n?'3px 3px 0 0 var(--tumlet-ink)':'none'}}>{n}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {err && <div style={{color:'var(--tumlet-red)',fontSize:14,fontWeight:700,marginBottom:12}}>{err}</div>}
+          <button className="pill-btn" disabled={busy} onClick={mode==='create'?create:join}
+            style={{width:'100%',padding:'14px',fontSize:18,color:'#fff',background:busy?'#cbbfae':'var(--tumlet-red)',boxShadow:busy?'none':'5px 5px 0 0 var(--tumlet-ink)'}}>
+            {busy?'Loading…':mode==='create'?'Create →':'Join →'}
+          </button>
+          <button onClick={()=>{setMode(null);setErr('');}} style={{width:'100%',marginTop:10,padding:'10px',fontSize:15,color:'var(--tumlet-footer)',background:'transparent',border:0,cursor:'pointer',textDecoration:'underline'}}>
+            ← Back
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── player views ──────────────────────────────────────────────────────────
+function PLayer_Lobby({ room, players, me }) {
+  return (
+    <div style={{padding:'30px 18px 40px',minHeight:'100dvh',display:'flex',flexDirection:'column'}}>
+      <div style={{textAlign:'center',marginBottom:24}}>
+        <Wordmark size={36}/>
+        <div style={{fontFamily:'var(--font-hand)',color:'var(--tumlet-brown)',fontSize:16,transform:'rotate(-1.5deg)',marginTop:2}}>everyone's an AI. play along.</div>
+      </div>
+      <div style={{background:'var(--tumlet-paper)',border:'2px solid var(--tumlet-ink)',borderRadius:'var(--radius-lg)',padding:18,boxShadow:'5px 5px 0 0 var(--tumlet-yellow)',marginBottom:20,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <span style={{fontSize:13,color:'var(--tumlet-footer)'}}>room code</span>
+        <span style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:28,letterSpacing:'0.2em'}}>{room.code}</span>
+      </div>
+      <div style={{fontSize:12,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',color:'var(--tumlet-footer)',marginBottom:8}}>in the lobby · {players.length}</div>
+      <div style={{display:'flex',flexDirection:'column',gap:8,flex:1}}>
+        {players.map(p=>(
+          <div key={p.id} className="slideup" style={{display:'flex',alignItems:'center',gap:10,background:'var(--tumlet-paper)',border:'2px solid var(--tumlet-ink)',borderRadius:'var(--radius-md)',padding:'8px 12px'}}>
+            <Avatar player={p} size={34}/>
+            <div>
+              <div style={{fontWeight:700,fontSize:15}}>{p.name}{p.id===me.id&&<span style={{color:'var(--tumlet-red)'}}> (you)</span>}</div>
+              <div style={{fontSize:11,color:'var(--tumlet-footer)'}}>{p.is_admin?'host':'player'}</div>
+            </div>
+            <span style={{marginLeft:'auto',fontSize:12,fontWeight:700,color:'var(--tumlet-green)'}}>ready</span>
+          </div>
+        ))}
+      </div>
+      <div style={{textAlign:'center',marginTop:18,fontSize:13,color:'var(--tumlet-footer)'}}>
+        waiting for the host to start<span className="typing" style={{marginLeft:6}}><i/><i/><i/></span>
+      </div>
+    </div>
+  );
+}
+
+function PLayer_Assign({ me }) {
+  const rule = me.rule_id ? RULE[me.rule_id] : null;
+  const [flipped, setFlipped] = useState(false);
+  return (
+    <div style={{padding:'50px 18px 40px',minHeight:'100dvh',display:'flex',flexDirection:'column',justifyContent:'center',textAlign:'center'}}>
+      <div style={{fontSize:12,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.14em',color:'var(--tumlet-footer)',marginBottom:14}}>you've been prompted</div>
+      <button onClick={()=>setFlipped(true)} style={{border:'3px solid var(--tumlet-ink)',cursor:flipped?'default':'pointer',borderRadius:'var(--radius-lg)',padding:'34px 22px',minHeight:220,
+        background:flipped?'var(--tumlet-yellow)':'var(--tumlet-ink)',color:flipped?'var(--tumlet-ink)':'var(--tumlet-beige)',
+        boxShadow:'7px 7px 0 0 var(--tumlet-red)',transition:'background .3s ease',
+        display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:14,width:'100%'}}>
+        {!flipped ? (
+          <>
+            <span style={{fontSize:60}}>🔒</span>
+            <span style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:20}}>tap to reveal your<br/>secret prompt rule</span>
+            <span style={{fontFamily:'var(--font-hand)',fontSize:16,opacity:0.7}}>don't let the others see…</span>
+          </>
+        ) : rule ? (
+          <div className="hand-pop">
+            <div style={{fontSize:64}}>{rule.glyph}</div>
+            <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:24,lineHeight:1.15,marginTop:8}}>{rule.full}</div>
+            <div style={{fontFamily:'var(--font-hand)',fontSize:17,marginTop:12}}>follow it in every answer →</div>
+          </div>
+        ) : <span>Loading…</span>}
+      </button>
+      <div style={{marginTop:22,fontSize:13,color:'var(--tumlet-footer)'}}>
+        {flipped?'memorise it. the host is dealing the first question…':'this rule stays with you all game'}
+      </div>
+    </div>
+  );
+}
+
+function PLayer_Question({ room, me }) {
+  const rule = me.rule_id ? RULE[me.rule_id] : null;
+  const question = (room.questions||[])[room.round] || '';
+  const [text, setText] = useState('');
+  const locked = me.answer != null;
+  const rem = useTimer(room.timer_started_at, room.timer_duration);
+  const passes = rule?.check ? rule.check(text) : null;
+
+  async function submit() {
+    if (!text.trim()) return;
+    await db.from('chatjpt_players').update({ answer: text.trim() }).eq('id', me.id);
+  }
+
+  return (
+    <div style={{minHeight:'100dvh',display:'flex',flexDirection:'column'}}>
+      {rule && <RulePeek rule={rule}/>}
+      <div style={{flex:1,padding:'12px 16px 0',display:'flex',flexDirection:'column'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+          <Wordmark size={22}/>
+          <TimerRing seconds={rem} total={room.timer_duration||60}/>
+        </div>
+        <div style={{display:'flex',gap:8,alignItems:'flex-start'}}>
+          <div style={{width:30,height:30,borderRadius:'50%',background:'var(--tumlet-ink)',color:'var(--tumlet-beige)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0}}>❓</div>
+          <div style={{background:'var(--tumlet-paper)',border:'2px solid var(--tumlet-ink)',borderRadius:'4px 16px 16px 16px',padding:'12px 14px',boxShadow:'3px 3px 0 0 var(--tumlet-yellow)'}}>
+            <div style={{fontSize:11,fontWeight:700,color:'var(--tumlet-footer)',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:4}}>question {room.round+1} of {room.total_rounds}</div>
+            <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:20,lineHeight:1.2}}>{question}</div>
+          </div>
+        </div>
+        <div style={{flex:1}}/>
+        {locked ? (
+          <div className="slideup" style={{marginBottom:16}}>
+            <div style={{display:'flex',justifyContent:'flex-end',marginBottom:10}}>
+              <div style={{background:pColor(me),color:'#fff',border:'2px solid var(--tumlet-ink)',borderRadius:'16px 16px 4px 16px',padding:'12px 14px',maxWidth:'85%',boxShadow:'3px 3px 0 0 var(--tumlet-ink)'}}>
+                <div style={{fontSize:18,fontWeight:700,fontFamily:'var(--font-display)'}}>{me.answer}</div>
+              </div>
+            </div>
+            <div style={{textAlign:'center',background:'var(--tumlet-ink)',color:'var(--tumlet-beige)',borderRadius:'var(--radius-md)',padding:'12px',fontWeight:700}}>
+              ✓ answer locked — waiting on the room<span className="typing" style={{marginLeft:8}}><i/><i/><i/></span>
+            </div>
+          </div>
+        ) : (
+          <div style={{paddingBottom:16}}>
+            <textarea autoFocus value={text} onChange={e=>setText(e.target.value)} rows={3} placeholder="type your answer…"
+              style={{width:'100%',resize:'none',padding:'12px 14px',fontSize:17,borderRadius:'var(--radius-md)',background:'var(--tumlet-paper)',boxSizing:'border-box'}}/>
+            {rule && (
+              <div style={{display:'flex',alignItems:'center',gap:6,margin:'6px 2px 8px',fontSize:13,fontWeight:700,
+                color:text.trim()?(passes===true?'var(--tumlet-green)':passes===false?'var(--tumlet-footer)':'var(--tumlet-footer)'):'var(--tumlet-footer)'}}>
+                {text.trim() && passes !== null
+                  ? (passes ? `✓ fits your rule` : `✗ doesn't fit your rule yet`)
+                  : `${rule.glyph} ${rule.label}`}
+              </div>
+            )}
+            <button className="pill-btn" disabled={!text.trim()} onClick={submit}
+              style={{width:'100%',padding:'15px',fontSize:19,color:'#fff',background:text.trim()?'var(--tumlet-red)':'#cbbfae',boxShadow:text.trim()?'5px 5px 0 0 var(--tumlet-ink)':'none'}}>
+              send answer →
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PLayer_Reveal({ room, players, me }) {
+  const rule = me.rule_id ? RULE[me.rule_id] : null;
+  const authorId = room.reveal_author_id;
+  const author = players.find(p=>p.id===authorId);
+  const revealOrder = room.reveal_order || [];
+  const isMyAnswer = authorId===me.id;
+
+  async function toggleHand() {
+    if (isMyAnswer || room.reveal_finalized) return;
+    await db.from('chatjpt_players').update({ hand_raised: !me.hand_raised }).eq('id', me.id);
+  }
+
+  const upCount = players.filter(p=>p.id===authorId||p.hand_raised).length;
+
+  return (
+    <div style={{minHeight:'100dvh',display:'flex',flexDirection:'column'}}>
+      {rule && <RulePeek rule={rule}/>}
+      <div style={{flex:1,padding:'12px 16px 0',display:'flex',flexDirection:'column'}}>
+        <div style={{textAlign:'center',fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.12em',color:'var(--tumlet-footer)',marginBottom:12}}>
+          reveal · answer {(room.reveal_index||0)+1} of {revealOrder.length}
+        </div>
+        <div className="slideup" key={authorId} style={{display:'flex',gap:8,alignItems:'flex-start',marginBottom:18}}>
+          <div style={{width:32,height:32,borderRadius:'50%',background:'var(--tumlet-ink)',color:'var(--tumlet-beige)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>🤖</div>
+          <div style={{background:'var(--tumlet-paper)',border:'2px solid var(--tumlet-ink)',borderRadius:'4px 18px 18px 18px',padding:'14px 16px',boxShadow:'4px 4px 0 0 var(--tumlet-yellow)',flex:1}}>
+            <div style={{fontSize:11,fontWeight:700,color:'var(--tumlet-footer)'}}>a model answered…</div>
+            <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:22,lineHeight:1.25,marginTop:4}}>"{author?author.answer:'…'}"</div>
+            {room.reveal_finalized && author && (
+              <div className="slideup" style={{marginTop:8,display:'flex',alignItems:'center',gap:7,fontSize:12,color:'var(--tumlet-footer)'}}>
+                <Avatar player={author} size={20}/>
+                <span style={{fontWeight:700}}>{author.name}</span>
+              </div>
+            )}
+          </div>
+        </div>
+        <div style={{marginBottom:16}}>
+          <div style={{display:'flex',justifyContent:'center',gap:8,marginBottom:6}}>
+            {players.map(p=>{
+              const up=p.id===authorId||p.hand_raised;
+              return (
+                <div key={p.id} style={{position:'relative'}}>
+                  {up&&<div className="hand-pop" style={{position:'absolute',top:-18,left:'50%',transform:'translateX(-50%)',fontSize:16}}>✋</div>}
+                  <Avatar player={p} size={36} dim={!up}/>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{textAlign:'center',fontFamily:'var(--font-display)',fontWeight:800,fontSize:16}}>{upCount} / {players.length} hands up</div>
+        </div>
+        <div style={{flex:1}}/>
+        <div style={{paddingBottom:18}}>
+          {room.reveal_finalized ? (
+            <div className="hand-pop" style={{background:room.reveal_scored?'var(--tumlet-green)':'var(--tumlet-ink)',color:'#fff',border:'3px solid var(--tumlet-ink)',borderRadius:'var(--radius-lg)',padding:'18px',textAlign:'center',boxShadow:room.reveal_scored?'6px 6px 0 0 var(--tumlet-yellow)':'5px 5px 0 0 var(--tumlet-red)'}}>
+              <div style={{fontSize:36}}>{room.reveal_scored?'🎉':'🙅'}</div>
+              <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:20,marginTop:4}}>
+                {room.reveal_scored?`ALL hands up! +1 for ${author?author.name:'…'}`:'not everyone bit.'}
+              </div>
+              <div style={{fontSize:13,opacity:.85,marginTop:4}}>{room.reveal_scored?'every secret rule was satisfied 🤯':'no point — that\'s the brutal math'}</div>
+            </div>
+          ) : isMyAnswer ? (
+            <div style={{background:'var(--tumlet-yellow)',border:'2px solid var(--tumlet-ink)',borderRadius:'var(--radius-md)',padding:'16px',textAlign:'center',boxShadow:'4px 4px 0 0 var(--tumlet-brown)'}}>
+              <div style={{fontSize:30}}>🎤</div>
+              <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:18,marginTop:4}}>that's YOUR answer on stage</div>
+              <div style={{fontSize:13,color:'var(--tumlet-brown)',marginTop:2}}>sit tight — see who raises for you</div>
+            </div>
+          ) : (
+            <div>
+              <div style={{textAlign:'center',fontSize:13,color:'var(--tumlet-footer)',marginBottom:10}}>
+                does this answer secretly satisfy <b>{rule?`${rule.glyph} ${rule.label}`:'your rule'}</b>?
+              </div>
+              <button onClick={toggleHand} style={{width:'100%',border:'3px solid var(--tumlet-ink)',cursor:'pointer',borderRadius:'var(--radius-lg)',padding:'22px 16px',
+                background:me.hand_raised?'var(--tumlet-ink)':'var(--tumlet-yellow)',color:me.hand_raised?'var(--tumlet-yellow)':'var(--tumlet-ink)',
+                boxShadow:me.hand_raised?'2px 2px 0 0 var(--tumlet-red)':'6px 6px 0 0 var(--tumlet-red)',
+                transform:me.hand_raised?'translate(4px,4px) rotate(-0.88deg)':'rotate(-0.88deg)',
+                transition:'transform .1s ease,box-shadow .1s ease,background .15s ease',
+                display:'flex',flexDirection:'column',alignItems:'center',gap:6}}>
+                <span className={me.hand_raised?'hand-pop':''} style={{fontSize:46,lineHeight:1}}>✋</span>
+                <span style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:22}}>{me.hand_raised?"hand's up!":'Raise Hand'}</span>
+                {me.hand_raised&&<span style={{fontSize:12,fontWeight:700,opacity:.85}}>tap to lower</span>}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Leaderboard({ players, me, reveal }) {
+  const ranked = [...players].sort((a,b)=>b.score-a.score);
+  const max = Math.max(1,...ranked.map(p=>p.score));
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:8}}>
+      {ranked.map((p,i)=>(
+        <div key={p.id} style={{display:'flex',alignItems:'center',gap:10,background:i===0?'var(--tumlet-yellow)':'var(--tumlet-paper)',border:'2px solid var(--tumlet-ink)',borderRadius:'var(--radius-md)',padding:'10px 12px',boxShadow:i===0?'4px 4px 0 0 var(--tumlet-ink)':'none'}}>
+          <span style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:18,width:22}}>{i+1}</span>
+          <Avatar player={p} size={34}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:15}}>{p.name}{p.id===me?.id&&' (you)'}</div>
+            {reveal&&p.rule_id&&<div style={{fontSize:11,color:'var(--tumlet-footer)'}}>{RULE[p.rule_id]?.glyph} {RULE[p.rule_id]?.label}</div>}
+            <div style={{height:6,background:'rgba(19,13,1,0.1)',borderRadius:'var(--radius-pill)',overflow:'hidden',marginTop:4}}>
+              <div style={{width:`${(p.score/max)*100}%`,height:'100%',background:pColor(p),borderRadius:'var(--radius-pill)',transition:'width .5s ease',minWidth:p.score>0?6:0}}/>
+            </div>
+          </div>
+          <span style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:22,flexShrink:0}}>{p.score}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PLayer_Score({ room, players, me }) {
+  return (
+    <div style={{padding:'40px 18px 40px',minHeight:'100dvh',display:'flex',flexDirection:'column'}}>
+      <div style={{textAlign:'center',marginBottom:18}}>
+        <div style={{fontSize:12,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.12em',color:'var(--tumlet-footer)'}}>after round {room.round+1}</div>
+        <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:26}}>the standings</div>
+      </div>
+      <div style={{flex:1}}><Leaderboard players={players} me={me}/></div>
+      <div style={{textAlign:'center',marginTop:16,fontSize:13,color:'var(--tumlet-footer)'}}>
+        rules stay the same. next question incoming<span className="typing" style={{marginLeft:6}}><i/><i/><i/></span>
+      </div>
+    </div>
+  );
+}
+
+function PLayer_End({ players, me }) {
+  const ranked = [...players].sort((a,b)=>b.score-a.score);
+  const winner = ranked[0];
+  return (
+    <div style={{padding:'40px 18px 40px',minHeight:'100dvh',display:'flex',flexDirection:'column'}}>
+      <div style={{textAlign:'center'}}><Wordmark size={28}/><div style={{fontFamily:'var(--font-hand)',color:'var(--tumlet-brown)',fontSize:16}}>game over</div></div>
+      {winner&&(
+        <div className="hand-pop" style={{textAlign:'center',margin:'18px 0',background:'var(--tumlet-ink)',color:'var(--tumlet-beige)',border:'3px solid var(--tumlet-ink)',borderRadius:'var(--radius-lg)',padding:'22px',boxShadow:'6px 6px 0 0 var(--tumlet-red)'}}>
+          <div style={{fontSize:44}}>👑</div>
+          <Avatar player={winner} size={56}/>
+          <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:24,marginTop:8}}>{winner.name} wins</div>
+          <div style={{fontSize:13,opacity:.8}}>{winner.score} point{winner.score===1?'':'s'} · best prompt-smuggler</div>
+        </div>
+      )}
+      <div style={{flex:1}}><Leaderboard players={players} me={me} reveal/></div>
+      <div style={{textAlign:'center',marginTop:16,fontSize:13,color:'var(--tumlet-footer)'}}>host can start a new game</div>
+    </div>
+  );
+}
+
+// ─── host views ────────────────────────────────────────────────────────────
+function HBtn({ children, onClick, disabled, tone='red', big }) {
+  const bg = disabled?'#cbbfae':tone==='red'?'var(--tumlet-red)':tone==='ink'?'var(--tumlet-ink)':'var(--tumlet-yellow)';
+  const col = disabled?'#8a7d68':tone==='yellow'?'var(--tumlet-ink)':'#fff';
+  return (
+    <button className={disabled?'':'pill-btn'} onClick={disabled?undefined:onClick} disabled={disabled}
+      style={{padding:big?'14px 36px':'11px 24px',fontSize:big?19:16,color:col,background:bg,border:0,borderRadius:'var(--radius-md)',
+        boxShadow:disabled?'none':tone==='yellow'?'5px 5px 0 0 var(--tumlet-brown)':'5px 5px 0 0 var(--tumlet-ink)',cursor:disabled?'not-allowed':'pointer',opacity:disabled?.7:1}}>
+      {children}
+    </button>
+  );
+}
+
+function HHeader({ right }) {
+  return (
+    <div style={{display:'flex',alignItems:'center',gap:16,marginBottom:24}}>
+      <Wordmark size={30}/>
+      <span style={{fontFamily:'var(--font-hand)',fontSize:15,color:'var(--tumlet-brown)',marginLeft:4}}>host deck</span>
+      {right&&<div style={{marginLeft:'auto'}}>{right}</div>}
+    </div>
+  );
+}
+
+function Host_Lobby({ room, players, me, actions }) {
+  return (
+    <div style={{padding:'28px 36px',minHeight:'100dvh'}}>
+      <HHeader right={<HBtn onClick={actions.startGame} tone="red" big>deal the rules →</HBtn>}/>
+      <div style={{display:'flex',gap:40,alignItems:'flex-start',flexWrap:'wrap'}}>
+        <div style={{width:270,flexShrink:0}}>
+          <div style={{fontSize:13,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.12em',color:'var(--tumlet-footer)',marginBottom:10}}>join at chatjpt.party</div>
+          <div style={{background:'var(--tumlet-ink)',color:'var(--tumlet-beige)',borderRadius:'var(--radius-lg)',padding:'22px',textAlign:'center',boxShadow:'7px 7px 0 0 var(--tumlet-yellow)'}}>
+            <div style={{fontSize:12,letterSpacing:'0.2em',opacity:.7}}>ROOM CODE</div>
+            <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:52,letterSpacing:'0.12em',lineHeight:1.1}}>{room.code}</div>
+          </div>
+          <div style={{marginTop:18}}>
+            <div style={{fontSize:13,fontWeight:700,color:'var(--tumlet-footer)',marginBottom:8}}>questions this game</div>
+            <div style={{display:'flex',gap:8}}>
+              {[3,5,8].map(n=>(
+                <button key={n} onClick={()=>actions.setRounds(n)} style={{flex:1,padding:'10px 0',fontFamily:'var(--font-display)',fontWeight:800,fontSize:18,cursor:'pointer',border:'2px solid var(--tumlet-ink)',borderRadius:'var(--radius-md)',background:room.total_rounds===n?'var(--tumlet-yellow)':'var(--tumlet-paper)',boxShadow:room.total_rounds===n?'3px 3px 0 0 var(--tumlet-ink)':'none'}}>{n}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div style={{flex:1,minWidth:240}}>
+          <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:22,marginBottom:14}}>{players.length} player{players.length===1?'':'s'} in lobby</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12}}>
+            {players.map(p=>(
+              <div key={p.id} className="slideup" style={{display:'flex',alignItems:'center',gap:10,background:'var(--tumlet-paper)',border:'2px solid var(--tumlet-ink)',borderRadius:'var(--radius-md)',padding:'12px 14px',boxShadow:`4px 4px 0 0 ${pColor(p)}`}}>
+                <Avatar player={p} size={40}/>
+                <div>
+                  <div style={{fontWeight:700,fontSize:16}}>{p.name}{p.id===me.id&&<span style={{color:'var(--tumlet-red)'}}> · you</span>}</div>
+                  <div style={{fontSize:11,color:'var(--tumlet-footer)'}}>{p.is_admin?'host':'player'}</div>
+                </div>
+                <span style={{marginLeft:'auto',fontSize:12,fontWeight:700,color:'var(--tumlet-green)'}}>● ready</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Host_Assign({ players, actions }) {
+  return (
+    <div style={{padding:'28px 36px',minHeight:'100dvh'}}>
+      <HHeader right={<HBtn onClick={actions.startQuestion} tone="red" big>first question →</HBtn>}/>
+      <div style={{textAlign:'center',maxWidth:560,margin:'0 auto 26px'}}>
+        <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:28}}>secret rules dealt 🔒</div>
+        <p style={{fontSize:15,color:'var(--tumlet-brown)',marginTop:8}}>every player got one private prompt rule — even you can't see theirs, and they can't see yours. follow it in <em>every</em> answer. they stick for the whole game.</p>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:14,maxWidth:860,margin:'0 auto'}}>
+        {players.map(p=>(
+          <div key={p.id} className="slideup" style={{textAlign:'center'}}>
+            <div style={{background:'var(--tumlet-ink)',borderRadius:'var(--radius-md)',padding:'22px 8px',boxShadow:`5px 5px 0 0 ${pColor(p)}`}}>
+              <div style={{fontSize:34}}>🔒</div>
+              <div style={{color:'var(--tumlet-beige)',fontSize:11,fontWeight:700,marginTop:6}}>rule assigned</div>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,marginTop:10}}>
+              <Avatar player={p} size={32}/>
+              <div style={{fontWeight:700,fontSize:13}}>{p.name}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Host_Question({ room, players, me, actions }) {
+  const question = (room.questions||[])[room.round]||'';
+  const answered = players.filter(p=>p.answer!=null).length;
+  const rem = useTimer(room.timer_started_at, room.timer_duration);
+  const canReveal = answered===players.length || rem<=0;
+
+  return (
+    <div style={{padding:'28px 36px',minHeight:'100dvh'}}>
+      <HHeader right={
+        <div style={{display:'flex',alignItems:'center',gap:14}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,background:rem<=10?'var(--tumlet-red)':'var(--tumlet-ink)',color:'#fff',borderRadius:'var(--radius-pill)',padding:'8px 16px',fontFamily:'var(--font-display)',fontWeight:800,fontSize:20}}>⏱ {Math.max(0,rem)}s</div>
+          <HBtn onClick={actions.startReveal} disabled={!canReveal} tone="red" big>start the reveal →</HBtn>
+        </div>
+      }/>
+      <div style={{background:'var(--tumlet-yellow)',border:'3px solid var(--tumlet-ink)',borderRadius:'var(--radius-lg)',padding:'22px 26px',boxShadow:'7px 7px 0 0 var(--tumlet-ink)',marginBottom:22}}>
+        <div style={{fontSize:13,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.12em',color:'var(--tumlet-brown)'}}>question {room.round+1} / {room.total_rounds}</div>
+        <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:34,lineHeight:1.15,marginTop:4}}>{question}</div>
+      </div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+        <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:20}}>who's answered</div>
+        <div style={{fontWeight:700,color:'var(--tumlet-footer)'}}>{answered} / {players.length} in</div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:12,maxWidth:860}}>
+        {players.map(p=>(
+          <div key={p.id} style={{background:'var(--tumlet-paper)',border:'2px solid var(--tumlet-ink)',borderRadius:'var(--radius-md)',padding:'14px 10px',textAlign:'center',boxShadow:p.answer!=null?'4px 4px 0 0 var(--tumlet-green)':'none',transition:'box-shadow .25s'}}>
+            <Avatar player={p} size={40} dim={p.answer==null}/>
+            <div style={{fontWeight:700,fontSize:13,marginTop:7}}>{p.name}</div>
+            <div style={{marginTop:5,minHeight:20}}>
+              {p.answer!=null?<span style={{fontSize:12,fontWeight:700,color:'var(--tumlet-green)'}}>✓ answered</span>:<span className="typing" style={{color:'var(--tumlet-footer)'}}><i/><i/><i/></span>}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p style={{textAlign:'center',color:'var(--tumlet-footer)',fontSize:13,marginTop:18}}>
+        the host never sees the answers or the rules — only who's locked in.
+      </p>
+    </div>
+  );
+}
+
+function Host_Reveal({ room, players, actions }) {
+  const authorId = room.reveal_author_id;
+  const author = players.find(p=>p.id===authorId);
+  const revealOrder = room.reveal_order||[];
+  const upCount = players.filter(p=>p.id===authorId||p.hand_raised).length;
+  const isLast = (room.reveal_index||0)===revealOrder.length-1;
+  const btnLabel = room.reveal_finalized ? (isLast?'round results →':'next answer →') : '🔒 lock the hands';
+
+  return (
+    <div style={{padding:'28px 36px',minHeight:'100dvh'}}>
+      <HHeader right={
+        <div style={{display:'flex',alignItems:'center',gap:14}}>
+          <div style={{fontWeight:700,color:'var(--tumlet-footer)'}}>answer {(room.reveal_index||0)+1} / {revealOrder.length}</div>
+          <HBtn onClick={actions.advanceReveal} tone={room.reveal_finalized?'ink':'red'} big>{btnLabel}</HBtn>
+        </div>
+      }/>
+      <div style={{display:'flex',gap:28,alignItems:'flex-start',flexWrap:'wrap'}}>
+        <div style={{flex:1,minWidth:280}}>
+          <div className="slideup" key={authorId} style={{background:'var(--tumlet-paper)',border:'3px solid var(--tumlet-ink)',borderRadius:'var(--radius-lg)',padding:'24px 26px',boxShadow:'7px 7px 0 0 var(--tumlet-yellow)'}}>
+            <div style={{display:'flex',alignItems:'center',gap:10,fontSize:13,color:'var(--tumlet-footer)',fontWeight:700,marginBottom:10}}>
+              <span style={{width:28,height:28,borderRadius:'50%',background:'var(--tumlet-ink)',color:'var(--tumlet-beige)',display:'inline-flex',alignItems:'center',justifyContent:'center'}}>🤖</span>
+              a model answered
+            </div>
+            <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:30,lineHeight:1.2}}>"{author?author.answer:'…'}"</div>
+            {room.reveal_finalized&&author&&(
+              <div className="slideup" style={{marginTop:14,display:'flex',alignItems:'center',gap:10}}>
+                <Avatar player={author} size={30}/>
+                <div>
+                  <div style={{fontWeight:700}}>{author.name}</div>
+                  {author.rule_id&&<div style={{fontSize:12,color:'var(--tumlet-footer)'}}>rule: {RULE[author.rule_id]?.glyph} {RULE[author.rule_id]?.label}</div>}
+                </div>
+                <div style={{marginLeft:'auto',fontFamily:'var(--font-display)',fontWeight:800,fontSize:18,color:room.reveal_scored?'var(--tumlet-green)':'var(--tumlet-footer)'}}>
+                  {room.reveal_scored?'🎉 +1 point':'no point'}
+                </div>
+              </div>
+            )}
+          </div>
+          {!room.reveal_finalized&&<p style={{color:'var(--tumlet-footer)',fontSize:14,marginTop:14}}>players are deciding if this answer <em>secretly</em> satisfies their own rule. lock when ready.</p>}
+        </div>
+        <div style={{width:270,flexShrink:0,background:'var(--tumlet-ink)',borderRadius:'var(--radius-lg)',padding:'20px',boxShadow:'6px 6px 0 0 var(--tumlet-red)'}}>
+          <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',color:'var(--tumlet-beige)',marginBottom:14}}>
+            <span style={{fontWeight:700,fontSize:14}}>hands raised</span>
+            <span style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:28}}>{upCount}<span style={{opacity:.5,fontSize:18}}>/{players.length}</span></span>
+          </div>
+          {players.map(p=>{
+            const up=p.id===authorId||p.hand_raised;
+            return (
+              <div key={p.id} style={{display:'flex',alignItems:'center',gap:10,padding:'7px 10px',borderRadius:'var(--radius-sm)',background:up?'rgba(243,185,82,0.18)':'rgba(255,255,255,0.04)',transition:'background .25s',marginBottom:4}}>
+                <Avatar player={p} size={28} dim={!up}/>
+                <span style={{color:'var(--tumlet-beige)',fontWeight:700,fontSize:14,opacity:up?1:.5}}>{p.name}</span>
+                <span style={{marginLeft:'auto',fontSize:18}} className={up?'hand-pop':''}>{up?'✋':''}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Host_Score({ room, players, me, actions }) {
+  const last = room.round>=room.total_rounds-1;
+  return (
+    <div style={{padding:'28px 36px',minHeight:'100dvh'}}>
+      <HHeader right={<HBtn onClick={actions.nextQuestion} tone="red" big>{last?'final results →':'next question →'}</HBtn>}/>
+      <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:26,marginBottom:16}}>standings after round {room.round+1}</div>
+      <div style={{maxWidth:680}}><Leaderboard players={players} me={me}/></div>
+      <p style={{color:'var(--tumlet-footer)',fontSize:14,marginTop:16}}>rules persist — same secret prompt, brand new question.</p>
+    </div>
+  );
+}
+
+function Host_End({ room, players, me, actions }) {
+  const ranked = [...players].sort((a,b)=>b.score-a.score);
+  return (
+    <div style={{padding:'28px 36px',minHeight:'100dvh'}}>
+      <HHeader right={<HBtn onClick={actions.resetGame} tone="ink" big>play again ↺</HBtn>}/>
+      <div style={{textAlign:'center',marginBottom:24}}>
+        <div style={{fontSize:52}}>👑</div>
+        {ranked[0]&&<>
+          <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:32}}>{ranked[0].name} is the best AI in the room</div>
+          <div style={{color:'var(--tumlet-brown)'}}>smuggled their rule past everyone {ranked[0].score} time{ranked[0].score===1?'':'s'}</div>
+        </>}
+      </div>
+      <div style={{maxWidth:680,margin:'0 auto'}}><Leaderboard players={players} me={me} reveal/></div>
+    </div>
+  );
+}
+
+// ─── root app ──────────────────────────────────────────────────────────────
+function App() {
+  const [session, setSession] = useState(()=>{ try{ return JSON.parse(localStorage.getItem('chatjpt')||'null'); }catch{ return null; } });
+  const [room, setRoom] = useState(null);
+  const [players, setPlayers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [confetti, setConfetti] = useState(0);
+  const prevRoom = useRef(null);
+
+  const me = useMemo(()=>players.find(p=>p.id===session?.playerId)||null,[players,session]);
+
+  // confetti on scoring
+  useEffect(()=>{
+    if (room?.reveal_finalized && !prevRoom.current?.reveal_finalized && room?.reveal_scored) {
+      setConfetti(k=>k+1);
+    }
+    prevRoom.current = room;
+  },[room]);
+
+  // load + subscribe
+  useEffect(()=>{
+    if (!session) return;
+    setLoading(true);
+    let ch1, ch2;
+
+    async function load() {
+      const { data: r } = await db.from('chatjpt_rooms').select('*').eq('code',session.roomCode).single();
+      if (!r) { localStorage.removeItem('chatjpt'); setSession(null); setLoading(false); return; }
+      setRoom(r);
+      const { data: ps } = await db.from('chatjpt_players').select('*').eq('room_code',session.roomCode).order('sort_order');
+      setPlayers(ps||[]);
+      setLoading(false);
+
+      ch1 = db.channel(`room:${session.roomCode}`)
+        .on('postgres_changes',{event:'*',schema:'public',table:'chatjpt_rooms',filter:`code=eq.${session.roomCode}`},
+          p=>setRoom(p.new))
+        .subscribe();
+
+      ch2 = db.channel(`players:${session.roomCode}`)
+        .on('postgres_changes',{event:'*',schema:'public',table:'chatjpt_players',filter:`room_code=eq.${session.roomCode}`},
+          p=>{
+            if (p.eventType==='INSERT') setPlayers(prev=>[...prev,p.new].sort((a,b)=>a.sort_order-b.sort_order));
+            else if (p.eventType==='UPDATE') setPlayers(prev=>prev.map(x=>x.id===p.new.id?p.new:x));
+            else if (p.eventType==='DELETE') setPlayers(prev=>prev.filter(x=>x.id!==p.old.id));
+          })
+        .subscribe();
+    }
+
+    load();
+    return ()=>{ if(ch1) db.removeChannel(ch1); if(ch2) db.removeChannel(ch2); };
+  },[session]);
+
+  // ─── admin actions ────────────────────────────────────────────────────────
+  const actions = {
+    setRounds: async n=>{
+      const questions=shuffle(QUESTIONS).slice(0,n);
+      await db.from('chatjpt_rooms').update({total_rounds:n,questions}).eq('code',session.roomCode);
+    },
+    startGame: async ()=>{
+      const ids=shuffle(RULES.map(r=>r.id));
+      await Promise.all(players.map((p,i)=>db.from('chatjpt_players').update({rule_id:ids[i%ids.length]}).eq('id',p.id)));
+      await db.from('chatjpt_rooms').update({phase:'assign'}).eq('code',session.roomCode);
+    },
+    startQuestion: async ()=>{
+      await db.from('chatjpt_players').update({answer:null,hand_raised:false}).eq('room_code',session.roomCode);
+      await db.from('chatjpt_rooms').update({phase:'question',timer_started_at:new Date().toISOString(),timer_duration:60}).eq('code',session.roomCode);
+    },
+    startReveal: async ()=>{
+      const order=shuffle(players.map(p=>p.id));
+      const firstId=order[0];
+      await db.from('chatjpt_rooms').update({phase:'reveal',reveal_order:order,reveal_index:0,reveal_author_id:firstId,reveal_finalized:false,reveal_scored:false}).eq('code',session.roomCode);
+    },
+    advanceReveal: async ()=>{
+      if (!room) return;
+      if (!room.reveal_finalized) {
+        const others=players.filter(p=>p.id!==room.reveal_author_id);
+        const allRaised=others.length>0&&others.every(p=>p.hand_raised);
+        if (allRaised) {
+          const author=players.find(p=>p.id===room.reveal_author_id);
+          if (author) await db.from('chatjpt_players').update({score:(author.score||0)+1}).eq('id',author.id);
+        }
+        await db.from('chatjpt_rooms').update({reveal_finalized:true,reveal_scored:allRaised}).eq('code',session.roomCode);
+      } else {
+        const order=room.reveal_order||[];
+        const nextIdx=(room.reveal_index||0)+1;
+        await db.from('chatjpt_players').update({hand_raised:false}).eq('room_code',session.roomCode);
+        if (nextIdx<order.length) {
+          await db.from('chatjpt_rooms').update({reveal_index:nextIdx,reveal_author_id:order[nextIdx],reveal_finalized:false,reveal_scored:false}).eq('code',session.roomCode);
+        } else {
+          await db.from('chatjpt_rooms').update({phase:'score'}).eq('code',session.roomCode);
+        }
+      }
+    },
+    nextQuestion: async ()=>{
+      if (!room) return;
+      const isLast=room.round>=room.total_rounds-1;
+      if (isLast) {
+        await db.from('chatjpt_rooms').update({phase:'end'}).eq('code',session.roomCode);
+      } else {
+        await db.from('chatjpt_players').update({answer:null,hand_raised:false}).eq('room_code',session.roomCode);
+        await db.from('chatjpt_rooms').update({phase:'question',round:room.round+1,timer_started_at:new Date().toISOString(),timer_duration:60,reveal_order:null,reveal_index:0,reveal_author_id:null,reveal_finalized:false,reveal_scored:false}).eq('code',session.roomCode);
+      }
+    },
+    resetGame: async ()=>{
+      if (!room) return;
+      const questions=shuffle(QUESTIONS).slice(0,room.total_rounds);
+      await db.from('chatjpt_players').update({answer:null,hand_raised:false,score:0,rule_id:null}).eq('room_code',session.roomCode);
+      await db.from('chatjpt_rooms').update({phase:'lobby',round:0,questions,reveal_order:null,reveal_index:0,reveal_author_id:null,reveal_finalized:false,reveal_scored:false}).eq('code',session.roomCode);
+    },
+  };
+
+  if (!session) return <Splash onSession={setSession}/>;
+
+  if (loading||!room||!me) return (
+    <div style={{minHeight:'100dvh',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16}}>
+      <Wordmark size={36}/>
+      <div style={{color:'var(--tumlet-footer)'}}>connecting<span className="typing" style={{marginLeft:6}}><i/><i/><i/></span></div>
+    </div>
+  );
+
+  const props = { room, players, me, actions };
+
+  const view = me.is_admin ? {
+    lobby:    <Host_Lobby    {...props}/>,
+    assign:   <Host_Assign   {...props}/>,
+    question: <Host_Question {...props}/>,
+    reveal:   <Host_Reveal   {...props}/>,
+    score:    <Host_Score    {...props}/>,
+    end:      <Host_End      {...props}/>,
+  } : {
+    lobby:    <PLayer_Lobby    {...props}/>,
+    assign:   <PLayer_Assign   {...props}/>,
+    question: <PLayer_Question {...props}/>,
+    reveal:   <PLayer_Reveal   {...props}/>,
+    score:    <PLayer_Score    {...props}/>,
+    end:      <PLayer_End      {...props}/>,
+  };
+
+  return (
+    <>
+      {view[room.phase] || null}
+      {confetti > 0 && <Confetti key={confetti}/>}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
