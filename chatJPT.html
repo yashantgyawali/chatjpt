@@ -533,7 +533,8 @@ function PLayer_Reveal({ room, players, me }) {
     await db.from('chatjpt_players').update({ hand_raised: !me.hand_raised }).eq('id', me.id);
   }
 
-  const upCount = players.filter(p=>p.id===authorId||p.hand_raised).length;
+  const gamePlayers = players.filter(p=>!p.is_admin);
+  const upCount = gamePlayers.filter(p=>p.id===authorId||p.hand_raised).length;
 
   return (
     <div style={{minHeight:'100dvh',display:'flex',flexDirection:'column'}}>
@@ -557,7 +558,7 @@ function PLayer_Reveal({ room, players, me }) {
         </div>
         <div style={{marginBottom:16}}>
           <div style={{display:'flex',justifyContent:'center',gap:8,marginBottom:6}}>
-            {players.map(p=>{
+            {gamePlayers.map(p=>{
               const up=p.id===authorId||p.hand_raised;
               return (
                 <div key={p.id} style={{position:'relative'}}>
@@ -567,7 +568,7 @@ function PLayer_Reveal({ room, players, me }) {
               );
             })}
           </div>
-          <div style={{textAlign:'center',fontFamily:'var(--font-display)',fontWeight:800,fontSize:16}}>{upCount} / {players.length} hands up</div>
+          <div style={{textAlign:'center',fontFamily:'var(--font-display)',fontWeight:800,fontSize:16}}>{upCount} / {gamePlayers.length} hands up</div>
         </div>
         <div style={{flex:1}}/>
         <div style={{paddingBottom:18}}>
@@ -757,9 +758,10 @@ function Host_Assign({ players, actions }) {
 
 function Host_Question({ room, players, me, actions }) {
   const question = (room.questions||[])[room.round]||'';
-  const answered = players.filter(p=>p.answer!=null).length;
+  const gamePlayers = players.filter(p=>!p.is_admin);
+  const answered = gamePlayers.filter(p=>p.answer!=null).length;
   const rem = useTimer(room.timer_started_at, room.timer_duration);
-  const canReveal = answered===players.length || rem<=0;
+  const canReveal = answered===gamePlayers.length || rem<=0;
 
   return (
     <div style={{padding:'28px 36px',minHeight:'100dvh'}}>
@@ -775,10 +777,10 @@ function Host_Question({ room, players, me, actions }) {
       </div>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
         <div style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:20}}>who's answered</div>
-        <div style={{fontWeight:700,color:'var(--tumlet-footer)'}}>{answered} / {players.length} in</div>
+        <div style={{fontWeight:700,color:'var(--tumlet-footer)'}}>{answered} / {gamePlayers.length} in</div>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:12,maxWidth:860}}>
-        {players.map(p=>(
+        {gamePlayers.map(p=>(
           <div key={p.id} style={{background:'var(--tumlet-paper)',border:'2px solid var(--tumlet-ink)',borderRadius:'var(--radius-md)',padding:'14px 10px',textAlign:'center',boxShadow:p.answer!=null?'4px 4px 0 0 var(--tumlet-green)':'none',transition:'box-shadow .25s'}}>
             <Avatar player={p} size={40} dim={p.answer==null}/>
             <div style={{fontWeight:700,fontSize:13,marginTop:7}}>{p.name}</div>
@@ -799,7 +801,8 @@ function Host_Reveal({ room, players, actions }) {
   const authorId = room.reveal_author_id;
   const author = players.find(p=>p.id===authorId);
   const revealOrder = room.reveal_order||[];
-  const upCount = players.filter(p=>p.id===authorId||p.hand_raised).length;
+  const gamePlayers = players.filter(p=>!p.is_admin);
+  const upCount = gamePlayers.filter(p=>p.id===authorId||p.hand_raised).length;
   const isLast = (room.reveal_index||0)===revealOrder.length-1;
   const btnLabel = room.reveal_finalized ? (isLast?'round results →':'next answer →') : '🔒 lock the hands';
 
@@ -837,9 +840,9 @@ function Host_Reveal({ room, players, actions }) {
         <div style={{width:270,flexShrink:0,background:'var(--tumlet-ink)',borderRadius:'var(--radius-lg)',padding:'20px',boxShadow:'6px 6px 0 0 var(--tumlet-red)'}}>
           <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',color:'var(--tumlet-beige)',marginBottom:14}}>
             <span style={{fontWeight:700,fontSize:14}}>hands raised</span>
-            <span style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:28}}>{upCount}<span style={{opacity:.5,fontSize:18}}>/{players.length}</span></span>
+            <span style={{fontFamily:'var(--font-display)',fontWeight:800,fontSize:28}}>{upCount}<span style={{opacity:.5,fontSize:18}}>/{gamePlayers.length}</span></span>
           </div>
-          {players.map(p=>{
+          {gamePlayers.map(p=>{
             const up=p.id===authorId||p.hand_raised;
             return (
               <div key={p.id} style={{display:'flex',alignItems:'center',gap:10,padding:'7px 10px',borderRadius:'var(--radius-sm)',background:up?'rgba(243,185,82,0.18)':'rgba(255,255,255,0.04)',transition:'background .25s',marginBottom:4}}>
@@ -944,7 +947,8 @@ function App() {
     },
     startGame: async ()=>{
       const ids=shuffle(RULES.map(r=>r.id));
-      await Promise.all(players.map((p,i)=>db.from('chatjpt_players').update({rule_id:ids[i%ids.length]}).eq('id',p.id)));
+      const nonAdmins=players.filter(p=>!p.is_admin);
+      await Promise.all(nonAdmins.map((p,i)=>db.from('chatjpt_players').update({rule_id:ids[i%ids.length]}).eq('id',p.id)));
       await db.from('chatjpt_rooms').update({phase:'assign'}).eq('code',session.roomCode);
     },
     startQuestion: async ()=>{
@@ -952,14 +956,14 @@ function App() {
       await db.from('chatjpt_rooms').update({phase:'question',timer_started_at:new Date().toISOString(),timer_duration:60}).eq('code',session.roomCode);
     },
     startReveal: async ()=>{
-      const order=shuffle(players.map(p=>p.id));
+      const order=shuffle(players.filter(p=>!p.is_admin).map(p=>p.id));
       const firstId=order[0];
       await db.from('chatjpt_rooms').update({phase:'reveal',reveal_order:order,reveal_index:0,reveal_author_id:firstId,reveal_finalized:false,reveal_scored:false}).eq('code',session.roomCode);
     },
     advanceReveal: async ()=>{
       if (!room) return;
       if (!room.reveal_finalized) {
-        const others=players.filter(p=>p.id!==room.reveal_author_id);
+        const others=players.filter(p=>p.id!==room.reveal_author_id && !p.is_admin);
         const allRaised=others.length>0&&others.every(p=>p.hand_raised);
         if (allRaised) {
           const author=players.find(p=>p.id===room.reveal_author_id);
