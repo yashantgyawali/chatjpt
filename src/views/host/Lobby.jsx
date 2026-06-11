@@ -6,7 +6,7 @@ import { pColor } from '../../data/gameData'
 export default function HostLobby({ room, players, me, actions }) {
   return (
     <div style={{ padding: '28px 36px', minHeight: '100dvh' }}>
-      <HHeader right={<HBtn onClick={actions.startGame} tone="red" big>deal the rules →</HBtn>} />
+      <HHeader room={room} onEnd={actions.endRoom} right={<HBtn onClick={actions.startGame} tone="red" big>deal the rules →</HBtn>} />
       <div style={{ display: 'flex', gap: 40, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ width: 270, flexShrink: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--tumlet-footer)', marginBottom: 10 }}>

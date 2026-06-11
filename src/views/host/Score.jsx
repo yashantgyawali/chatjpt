@@ -6,7 +6,7 @@ export default function HostScore({ room, players, me, actions }) {
   const last = room.round >= room.total_rounds - 1
   return (
     <div style={{ padding: '28px 36px', minHeight: '100dvh' }}>
-      <HHeader right={<HBtn onClick={actions.nextQuestion} tone="red" big>{last ? 'final results →' : 'next question →'}</HBtn>} />
+      <HHeader room={room} onEnd={actions.endRoom} right={<HBtn onClick={actions.nextQuestion} tone="red" big>{last ? 'final results →' : 'next question →'}</HBtn>} />
       <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 26, marginBottom: 16 }}>
         standings after round {room.round + 1}
       </div>

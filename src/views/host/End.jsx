@@ -2,11 +2,11 @@ import { HHeader } from '../../components/HHeader'
 import { HBtn } from '../../components/HBtn'
 import { Leaderboard } from '../../components/Leaderboard'
 
-export default function HostEnd({ players, me, actions }) {
+export default function HostEnd({ room, players, me, actions }) {
   const ranked = [...players].sort((a, b) => b.score - a.score)
   return (
     <div style={{ padding: '28px 36px', minHeight: '100dvh' }}>
-      <HHeader right={<HBtn onClick={actions.resetGame} tone="ink" big>play again ↺</HBtn>} />
+      <HHeader room={room} onEnd={actions.endRoom} right={<HBtn onClick={actions.resetGame} tone="ink" big>play again ↺</HBtn>} />
       <div style={{ textAlign: 'center', marginBottom: 24 }}>
         <div style={{ fontSize: 52 }}>👑</div>
         {ranked[0] && (

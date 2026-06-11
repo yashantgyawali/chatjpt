@@ -31,7 +31,6 @@ export function Splash({ onSession }) {
     setBusy(true); setErr('')
     const { data: room, error: re } = await db.from('chatjpt_rooms').select('phase').eq('code', code).single()
     if (re || !room) { setErr('Room not found'); setBusy(false); return }
-    if (room.phase !== 'lobby') { setErr('Game already started'); setBusy(false); return }
     const { data: existing } = await db.from('chatjpt_players').select('id').eq('room_code', code)
     const playerId = genId()
     const { error: pe } = await db.from('chatjpt_players').insert({ id: playerId, room_code: code, name: name.trim(), is_admin: false, sort_order: (existing || []).length })

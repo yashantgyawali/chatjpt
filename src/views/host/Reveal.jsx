@@ -21,7 +21,7 @@ export default function HostReveal({ room, players, actions }) {
           </div>
           <HBtn onClick={actions.advanceReveal} tone={room.reveal_finalized ? 'ink' : 'red'} big>{btnLabel}</HBtn>
         </div>
-      } />
+      } room={room} onEnd={actions.endRoom} />
       <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 280 }}>
           <div className="slideup" key={authorId} style={{ background: 'var(--tumlet-paper)', border: '3px solid var(--tumlet-ink)', borderRadius: 'var(--radius-lg)', padding: '24px 26px', boxShadow: '7px 7px 0 0 var(--tumlet-yellow)' }}>

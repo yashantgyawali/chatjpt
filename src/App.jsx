@@ -59,7 +59,14 @@ export function App() {
 
       ch1 = db.channel(`room:${session.roomCode}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'chatjpt_rooms', filter: `code=eq.${session.roomCode}` },
-          p => setRoom(p.new))
+          p => {
+            if (p.eventType === 'DELETE') {
+              localStorage.removeItem('chatjpt')
+              setSession(null)
+            } else {
+              setRoom(p.new)
+            }
+          })
         .subscribe()
 
       ch2 = db.channel(`players:${session.roomCode}`)
@@ -91,11 +98,20 @@ export function App() {
       await db.from('chatjpt_rooms').update({ phase: 'assign' }).eq('code', session.roomCode)
     },
     startQuestion: async () => {
+      // Assign rules to any late joiners who don't have one yet
+      const unassigned = players.filter(p => !p.is_admin && !p.rule_id)
+      if (unassigned.length > 0) {
+        const ids = shuffle(RULES.map(r => r.id))
+        await Promise.all(unassigned.map((p, i) =>
+          db.from('chatjpt_players').update({ rule_id: ids[i % ids.length] }).eq('id', p.id)
+        ))
+      }
       await db.from('chatjpt_players').update({ answer: null, hand_raised: false }).eq('room_code', session.roomCode)
       await db.from('chatjpt_rooms').update({ phase: 'question', timer_started_at: new Date().toISOString(), timer_duration: 60 }).eq('code', session.roomCode)
     },
     startReveal: async () => {
-      const order = shuffle(players.filter(p => !p.is_admin).map(p => p.id))
+      // Only reveal players who actually submitted an answer
+      const order = shuffle(players.filter(p => !p.is_admin && p.answer != null).map(p => p.id))
       const firstId = order[0]
       await db.from('chatjpt_rooms').update({ phase: 'reveal', reveal_order: order, reveal_index: 0, reveal_author_id: firstId, reveal_finalized: false, reveal_scored: false }).eq('code', session.roomCode)
     },
@@ -135,6 +151,15 @@ export function App() {
       const questions = shuffle(QUESTIONS).slice(0, room.total_rounds)
       await db.from('chatjpt_players').update({ answer: null, hand_raised: false, score: 0, rule_id: null }).eq('room_code', session.roomCode)
       await db.from('chatjpt_rooms').update({ phase: 'lobby', round: 0, questions, reveal_order: null, reveal_index: 0, reveal_author_id: null, reveal_finalized: false, reveal_scored: false }).eq('code', session.roomCode)
+    },
+    endRoom: async () => {
+      if (!window.confirm('End the room and kick everyone out?')) return
+      await db.from('chatjpt_players').delete().eq('room_code', session.roomCode)
+      await db.from('chatjpt_rooms').delete().eq('code', session.roomCode)
+      localStorage.removeItem('chatjpt')
+      setSession(null)
+      setRoom(null)
+      setPlayers([])
     },
   }
 

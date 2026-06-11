@@ -3,10 +3,10 @@ import { HBtn } from '../../components/HBtn'
 import { Avatar } from '../../components/Avatar'
 import { pColor } from '../../data/gameData'
 
-export default function HostAssign({ players, actions }) {
+export default function HostAssign({ room, players, actions }) {
   return (
     <div style={{ padding: '28px 36px', minHeight: '100dvh' }}>
-      <HHeader right={<HBtn onClick={actions.startQuestion} tone="red" big>first question →</HBtn>} />
+      <HHeader room={room} onEnd={actions.endRoom} right={<HBtn onClick={actions.startQuestion} tone="red" big>first question →</HBtn>} />
       <div style={{ textAlign: 'center', maxWidth: 560, margin: '0 auto 26px' }}>
         <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 28 }}>secret rules dealt 🔒</div>
         <p style={{ fontSize: 15, color: 'var(--tumlet-brown)', marginTop: 8 }}>

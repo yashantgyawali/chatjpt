@@ -3,7 +3,7 @@ import { HBtn } from '../../components/HBtn'
 import { Avatar } from '../../components/Avatar'
 import { useTimer } from '../../hooks/useTimer'
 
-export default function HostQuestion({ room, players, actions }) {
+export default function HostQuestion({ room, players, me, actions }) {
   const question = (room.questions || [])[room.round] || ''
   const gamePlayers = players.filter(p => !p.is_admin)
   const answered = gamePlayers.filter(p => p.answer != null).length
@@ -19,7 +19,7 @@ export default function HostQuestion({ room, players, actions }) {
           </div>
           <HBtn onClick={actions.startReveal} disabled={!canReveal} tone="red" big>start the reveal →</HBtn>
         </div>
-      } />
+      } room={room} onEnd={actions.endRoom} />
       <div style={{ background: 'var(--tumlet-yellow)', border: '3px solid var(--tumlet-ink)', borderRadius: 'var(--radius-lg)', padding: '22px 26px', boxShadow: '7px 7px 0 0 var(--tumlet-ink)', marginBottom: 22 }}>
         <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--tumlet-brown)' }}>
           question {room.round + 1} / {room.total_rounds}

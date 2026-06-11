@@ -3,7 +3,19 @@ import { RULE } from '../../data/gameData'
 import { RulePeek } from '../../components/RulePeek'
 import { Avatar } from '../../components/Avatar'
 
+function JoiningNextRound() {
+  return (
+    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px 18px', gap: 12 }}>
+      <div style={{ fontSize: 48 }}>⏳</div>
+      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 24 }}>joining next round</div>
+      <div style={{ color: 'var(--tumlet-footer)', fontSize: 14, maxWidth: 280 }}>you'll get your secret rule when the next question starts</div>
+      <div style={{ color: 'var(--tumlet-footer)', marginTop: 8 }}>hang tight<span className="typing" style={{ marginLeft: 6 }}><i /><i /><i /></span></div>
+    </div>
+  )
+}
+
 export default function PlayerReveal({ room, players, me }) {
+  if (!me.rule_id) return <JoiningNextRound />
   const rule = me.rule_id ? RULE[me.rule_id] : null
   const authorId = room.reveal_author_id
   const author = players.find(p => p.id === authorId)
