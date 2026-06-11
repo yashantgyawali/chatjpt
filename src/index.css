@@ -1,0 +1,60 @@
+:root {
+  --tumlet-red: #F16147; --tumlet-yellow: #F3B952; --tumlet-beige: #FAF1E4;
+  --tumlet-ink: #130D01; --tumlet-brown: #5A3A1F; --tumlet-paper: #FFFFFF;
+  --tumlet-footer: #6B6B6B; --tumlet-green: #5A8A4A;
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-pill: 999px;
+  --font-body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --font-display: 'Manrope', system-ui, sans-serif;
+  --font-hand: 'Patrick Hand', cursive;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; }
+body {
+  min-height: 100dvh; height: 100%;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(241,97,71,0.10) 0 3px, transparent 3px),
+    radial-gradient(circle at 78% 62%, rgba(243,185,82,0.14) 0 3px, transparent 3px),
+    radial-gradient(circle at 44% 88%, rgba(113,132,190,0.10) 0 4px, transparent 4px),
+    var(--tumlet-beige);
+  background-size: 90px 90px, 90px 90px, 110px 110px, auto;
+  color: var(--tumlet-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+#root { min-height: 100dvh; }
+input, textarea, button { font-family: inherit; }
+input, textarea {
+  background: var(--tumlet-paper); border: 2px solid var(--tumlet-ink);
+  border-radius: var(--radius-md); color: var(--tumlet-ink); outline: none;
+}
+input:focus, textarea:focus { border-color: var(--tumlet-red); }
+.pill-btn {
+  font-family: var(--font-body); font-weight: 700; border: 0;
+  border-radius: var(--radius-md); cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.12s ease;
+  transform: rotate(-0.88deg);
+}
+.pill-btn:hover:not(:disabled) { transform: rotate(-0.88deg) translate(-3px,-3px); }
+.pill-btn:active:not(:disabled) { transform: rotate(-0.88deg) scale(0.98); }
+.pill-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+.typing { display: inline-flex; gap: 4px; align-items: center; }
+.typing i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.5;
+  animation: bob 1s infinite ease-in-out; display: inline-block; }
+.typing i:nth-child(2) { animation-delay: 0.15s; }
+.typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes bob { 0%,80%,100%{transform:translateY(0);opacity:.4} 40%{transform:translateY(-5px);opacity:1} }
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes handpop {
+  0%{transform:scale(0.3) rotate(-25deg);opacity:0}
+  60%{transform:scale(1.25) rotate(8deg)}
+  100%{transform:scale(1) rotate(0);opacity:1}
+}
+.hand-pop { animation: handpop 0.4s cubic-bezier(.2,1.4,.4,1) both; }
+@keyframes slideup { from{transform:translateY(16px);opacity:0} to{transform:translateY(0);opacity:1} }
+.slideup { animation: slideup 0.32s ease-out both; }
+@keyframes fall {
+  0%{transform:translateY(-30px) rotate(0deg);opacity:1}
+  100%{transform:translateY(110vh) rotate(720deg);opacity:.9}
+}
+.confetti-piece { position:fixed; top:-20px; will-change:transform; pointer-events:none; z-index:200; }
+::-webkit-scrollbar { width:0; height:0; }
