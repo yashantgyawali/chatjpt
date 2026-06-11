@@ -1,7 +1,6 @@
 import { HHeader } from '../../components/HHeader'
 import { HBtn } from '../../components/HBtn'
 import { Avatar } from '../../components/Avatar'
-import { RULE } from '../../data/gameData'
 
 export default function HostReveal({ room, players, actions }) {
   const authorId = room.reveal_author_id
@@ -26,22 +25,15 @@ export default function HostReveal({ room, players, actions }) {
         <div style={{ flex: 1, minWidth: 280 }}>
           <div className="slideup" key={authorId} style={{ background: 'var(--tumlet-paper)', border: '3px solid var(--tumlet-ink)', borderRadius: 'var(--radius-lg)', padding: '24px 26px', boxShadow: '7px 7px 0 0 var(--tumlet-yellow)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--tumlet-footer)', fontWeight: 700, marginBottom: 10 }}>
-              <span style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--tumlet-ink)', color: 'var(--tumlet-beige)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>🤖</span>
-              a model answered
+              {author && <Avatar player={author} size={28} />}
+              <span style={{ fontWeight: 700, color: 'var(--tumlet-ink)' }}>{author ? author.name : '…'}</span>
             </div>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 30, lineHeight: 1.2 }}>
               "{author ? author.answer : '…'}"
             </div>
-            {room.reveal_finalized && author && (
-              <div className="slideup" style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Avatar player={author} size={30} />
-                <div>
-                  <div style={{ fontWeight: 700 }}>{author.name}</div>
-                  {author.rule_id && <div style={{ fontSize: 12, color: 'var(--tumlet-footer)' }}>rule: {RULE[author.rule_id]?.glyph} {RULE[author.rule_id]?.label}</div>}
-                </div>
-                <div style={{ marginLeft: 'auto', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, color: room.reveal_scored ? 'var(--tumlet-green)' : 'var(--tumlet-footer)' }}>
-                  {room.reveal_scored ? '🎉 +1 point' : 'no point'}
-                </div>
+            {room.reveal_finalized && (
+              <div className="slideup" style={{ marginTop: 14, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, color: room.reveal_scored ? 'var(--tumlet-green)' : 'var(--tumlet-footer)' }}>
+                {room.reveal_scored ? '🎉 +1 point' : 'no point'}
               </div>
             )}
           </div>

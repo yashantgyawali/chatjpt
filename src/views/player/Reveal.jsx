@@ -39,14 +39,8 @@ export default function PlayerReveal({ room, players, me }) {
         <div className="slideup" key={authorId} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 18 }}>
           <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--tumlet-ink)', color: 'var(--tumlet-beige)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>🤖</div>
           <div style={{ background: 'var(--tumlet-paper)', border: '2px solid var(--tumlet-ink)', borderRadius: '4px 18px 18px 18px', padding: '14px 16px', boxShadow: '4px 4px 0 0 var(--tumlet-yellow)', flex: 1 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--tumlet-footer)' }}>a model answered…</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--tumlet-footer)' }}>{author ? author.name : '…'} answered</div>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 22, lineHeight: 1.25, marginTop: 4 }}>"{author ? author.answer : '…'}"</div>
-            {room.reveal_finalized && author && (
-              <div className="slideup" style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: 'var(--tumlet-footer)' }}>
-                <Avatar player={author} size={20} />
-                <span style={{ fontWeight: 700 }}>{author.name}</span>
-              </div>
-            )}
           </div>
         </div>
         <div style={{ marginBottom: 16 }}>
