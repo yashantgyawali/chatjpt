@@ -35,21 +35,52 @@ export const RULES = [
     check: a => (a||'').trim().length>0 && !/[.,!?;:'"\\-—()]/.test(a||'') },
   { id:'actually', glyph:'🤓', label:'Start with "Actually,"', full:'Your answer must start with "Actually,".',
     check: a => /^actually,/i.test((a||'').trim()) },
-  { id:'emdash',   glyph:'—',  label:'Exactly one em dash',    full:'Must contain exactly one em dash —',
-    check: a => ((a||'').match(/—/g)||[]).length === 1 },
   { id:'hyphen',   glyph:'-',  label:'hyphen-between-words',   full:'A-hyphen-between-every-single-word.',
     check: a => (a||'').trim().length>0 && /\S-\S/.test(a||'') && !/\s/.test((a||'').trim()) },
-  { id:'nodots',   glyph:'ı',  label:'No dots on i & j',       full:'j and i carry no dots (j → ȷ, i → ı).' },
   { id:'typo',     glyph:'✗',  label:'Contains a typo',        full:'Your answer must contain a spelling error.' },
-  { id:'cipher',   glyph:'↪',  label:'A→B shift cipher',       full:'Shift every letter forward: A→B, B→C, C→D…' },
-  { id:'bdswap',   glyph:'⇄',  label:'b and d swapped',        full:'b and d are swapped everywhere.' },
   { id:'wrong',    glyph:'🙃', label:'Factually wrong',        full:'Your answer must be factually WRONG.' },
-  { id:'backwards',glyph:'⇋',  label:'Written backwards',      full:'Write the whole answer backwards.' },
-  { id:'revwords', glyph:'🔁', label:'Each word reversed',     full:'Reverse each word, keep order (cat dog → tac god).' },
   { id:'altcaps',  glyph:'aA', label:'aLtErNaTiNg CaPs',       full:'tYpE lIkE tHiS — aLtErNaTiNg CaPs.' },
 ]
 
 export const RULE = Object.fromEntries(RULES.map(r => [r.id, r]))
+
+// Rules in the same group can't all be satisfied by one answer, so a game
+// only ever deals one rule per group. Scoring requires a single answer to
+// pass EVERY player's rule simultaneously.
+const CONFLICT_GROUPS = [
+  ['titlecase', 'lower', 'altcaps'],              // case styles
+  ['oneword', 'twowords', 'samestart', 'hyphen'], // word count & joining
+  ['long', 'short'],                              // total length
+  ['oneword', 'long'],                            // no 13-letter single words
+  ['exclaim', 'question', 'nopunct', 'actually'], // endings & punctuation
+  ['hyphen', 'nopunct'],                          // hyphens are punctuation
+  ['hyphen', 'actually'],                         // "Actually," needs its comma + space
+  ['short', 'actually'],                          // "Actually," alone is 8 letters
+  ['samestart', 'actually'],                      // would force every word to start with A
+  ['color', 'number', 'body'],                    // required words don't fit under length rules together
+]
+
+const conflicts = (a, b) => CONFLICT_GROUPS.some(g => g.includes(a) && g.includes(b))
+
+function shuffled(arr) {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]] }
+  return a
+}
+
+// Deal `count` rule ids that are mutually compatible, and also compatible
+// with `existing` rule ids already held by players (for late joiners).
+// Repeats rules from the pool when there are more players than compatible rules.
+export function pickRules(count, existing = []) {
+  const pool = []
+  for (const id of shuffled(RULES.map(r => r.id))) {
+    if (existing.some(e => conflicts(e, id))) continue
+    if (pool.some(p => conflicts(p, id))) continue
+    pool.push(id)
+  }
+  const source = pool.length ? pool : shuffled([...new Set(existing)])
+  return Array.from({ length: count }, (_, i) => source[i % source.length])
+}
 
 export const QUESTIONS = [
   'What is the best thing to eat at 3am?',

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { db, shuffle } from './lib/supabase'
-import { RULES, QUESTIONS } from './data/gameData'
+import { QUESTIONS, pickRules } from './data/gameData'
 import { Wordmark } from './components/Wordmark'
 import { Confetti } from './components/Confetti'
 import { Splash } from './components/Splash'
@@ -92,18 +92,19 @@ export function App() {
       await db.from('chatjpt_rooms').update({ total_rounds: n, questions }).eq('code', session.roomCode)
     },
     startGame: async () => {
-      const ids = shuffle(RULES.map(r => r.id))
       const nonAdmins = players.filter(p => !p.is_admin)
-      await Promise.all(nonAdmins.map((p, i) => db.from('chatjpt_players').update({ rule_id: ids[i % ids.length] }).eq('id', p.id)))
+      const ids = pickRules(nonAdmins.length)
+      await Promise.all(nonAdmins.map((p, i) => db.from('chatjpt_players').update({ rule_id: ids[i] }).eq('id', p.id)))
       await db.from('chatjpt_rooms').update({ phase: 'assign' }).eq('code', session.roomCode)
     },
     startQuestion: async () => {
-      // Assign rules to any late joiners who don't have one yet
+      // Assign rules to any late joiners — must stay compatible with rules already in play
       const unassigned = players.filter(p => !p.is_admin && !p.rule_id)
       if (unassigned.length > 0) {
-        const ids = shuffle(RULES.map(r => r.id))
+        const held = players.filter(p => !p.is_admin && p.rule_id).map(p => p.rule_id)
+        const ids = pickRules(unassigned.length, held)
         await Promise.all(unassigned.map((p, i) =>
-          db.from('chatjpt_players').update({ rule_id: ids[i % ids.length] }).eq('id', p.id)
+          db.from('chatjpt_players').update({ rule_id: ids[i] }).eq('id', p.id)
         ))
       }
       await db.from('chatjpt_players').update({ answer: null, hand_raised: false }).eq('room_code', session.roomCode)
